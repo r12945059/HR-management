@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>HRMS</title>
+  <style>
+    :root { --bg:#0b1020; --card:#131a2a; --muted:#93a0b4; --text:#e6eefc; --accent:#4ea1ff; }
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0e1425,#0b1020);
+    color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Noto Sans TC",sans-serif}
+    header{padding:20px 24px;border-bottom:1px solid #1e2a44;display:flex;justify-content:space-between;align-items:center}
+    header h1{margin:0;font-size:20px;letter-spacing:1px}
+    .container{max-width:1100px;margin:24px auto;padding:0 16px;display:grid;grid-template-columns: 1fr 360px; gap:16px}
+    .card{background:var(--card);border:1px solid #1c2944;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .card h2{margin:0;padding:14px 16px;border-bottom:1px solid #1e2a44;font-size:16px}
+    .card .body{padding:14px 16px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 8px;border-bottom:1px solid #1e2a44;font-size:14px}
+    th{color:#b9c6da;text-align:left}
+    tr:hover{background:#0f1628}
+    .btn{background:#203656;border:1px solid #2b4c77;color:#dce7f8;padding:8px 10px;border-radius:10px;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    .btn-danger{border-color:#6b2730;background:#3a0f15}
+    .grid{display:grid;grid-template-columns:1fr 1fr; gap:8px}
+    .grid-1{grid-template-columns:1fr}
+    label{display:block;margin-bottom:4px;color:var(--muted);font-size:12px}
+    input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #26385c;background:#0c1322;color:var(--text)}
+    .row-actions{display:flex;gap:6px}
+    .muted{color:var(--muted);font-size:12px}
+    .right{display:flex;gap:8px;align-items:center}
+  </style>
+</head>
+<body>
+<header>
+  <h1>HRMS — Employees</h1>
+  <div class="right">
+    <input type="file" id="excel" accept=".xlsx,.xls"/>
+    <button class="btn" id="btnUpload">Bulk Upload</button>
+    <a href="/docs" class="btn">OpenAPI</a>
+  </div>
+</header>
+
+<div class="container">
+  <!-- 清單 -->
+  <section class="card" style="grid-column:1/2;">
+    <h2>Employee List</h2>
+    <div class="body">
+      <table>
+        <thead>
+        <tr>
+          <th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Title</th><th>Phone</th><th></th>
+        </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <p class="muted" id="emptyTip" style="display:none;">No data yet. Add one from the form →</p>
+    </div>
+  </section>
+
+  <!-- 表單 -->
+  <section class="card" style="grid-column:2/3;">
+    <h2 id="formTitle">Create / Edit</h2>
+    <div class="body">
+      <form id="empForm">
+        <input type="hidden" id="emp_id">
+        <div class="grid">
+          <div>
+            <label>First Name</label>
+            <input id="first_name" required>
+          </div>
+          <div>
+            <label>Last Name</label>
+            <input id="last_name" required>
+          </div>
+          <div class="grid-1">
+            <label>Email</label>
+            <input id="email" type="email" required>
+          </div>
+          <div>
+            <label>Department</label>
+            <input id="department">
+          </div>
+          <div>
+            <label>Title</label>
+            <input id="title">
+          </div>
+          <div>
+            <label>Phone</label>
+            <input id="phone">
+          </div>
+          <div>
+            <label>Hire Date</label>
+            <input id="hire_date" placeholder="YYYY-MM-DD">
+          </div>
+          <div>
+            <label>Salary</label>
+            <input id="salary" type="number" step="0.01" placeholder="e.g. 50000">
+          </div>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn" type="submit" id="btnSave">Save</button>
+          <button class="btn" type="button" id="btnReset">Reset</button>
+        </div>
+      </form>
+      <p class="muted" style="margin-top:6px;">* Save 會依是否帶有 ID 自動判斷新增或更新。</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = (q)=>document.querySelector(q);
+const api = {
+  list: ()=> fetch('/employees').then(r=>r.json()),
+  create: (payload)=> fetch('/employees',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()),
+  update: (id,payload)=> fetch(`/employees/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()),
+  remove: (id)=> fetch(`/employees/${id}`,{method:'DELETE'}).then(r=>r.json()),
+  upload: (file)=>{ const fd=new FormData(); fd.append('file',file); return fetch('/employees/upload',{method:'POST',body:fd}).then(r=>r.json()); }
+};
+
+function row(emp){
+  const tr=document.createElement('tr');
+  tr.innerHTML = `
+    <td>${emp.id ?? ''}</td>
+    <td>${emp.first_name ?? ''} ${emp.last_name ?? ''}</td>
+    <td>${emp.email ?? ''}</td>
+    <td>${emp.department ?? ''}</td>
+    <td>${emp.title ?? ''}</td>
+    <td>${emp.phone ?? ''}</td>
+    <td class="row-actions">
+      <button class="btn" data-act="edit">Edit</button>
+      <button class="btn btn-danger" data-act="del">Delete</button>
+    </td>`;
+  tr.querySelector('[data-act="edit"]').onclick = ()=> fillForm(emp);
+  tr.querySelector('[data-act="del"]').onclick = async ()=>{
+    if(!confirm(`Delete #${emp.id} ?`)) return;
+    await api.remove(emp.id); load();
+  };
+  return tr;
+}
+
+async function load(){
+  const data = await api.list();
+  const tbody = $('#tbody');
+  tbody.innerHTML='';
+  data.forEach(e => tbody.appendChild(row(e)));
+  $('#emptyTip').style.display = data.length ? 'none':'block';
+}
+
+function fillForm(emp){
+  $('#formTitle').textContent = `Edit #${emp.id}`;
+  $('#emp_id').value = emp.id ?? '';
+  ['first_name','last_name','email','department','title','phone','hire_date','salary']
+    .forEach(k => { $('#'+k).value = emp[k] ?? '' });
+}
+
+function collect(){
+  const v = k => ($('#'+k).value || undefined);
+  const sal = $('#salary').value; 
+  return {
+    id: $('#emp_id').value ? Number($('#emp_id').value) : undefined,
+    first_name: v('first_name'), last_name: v('last_name'), email: v('email'),
+    department: v('department'), title: v('title'), phone: v('phone'),
+    hire_date: v('hire_date'),
+    salary: sal==='' ? undefined : Number(sal)
+  };
+}
+
+$('#empForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const payload = collect();
+  if(payload.id){ await api.update(payload.id, payload); }
+  else { await api.create(payload); }
+  $('#empForm').reset(); $('#emp_id').value=''; $('#formTitle').textContent='Create / Edit';
+  load();
+});
+
+$('#btnReset').onclick = ()=>{ $('#empForm').reset(); $('#emp_id').value=''; $('#formTitle').textContent='Create / Edit'; };
+
+$('#btnUpload').onclick = async ()=>{
+  const f = $('#excel').files[0];
+  if(!f) return alert('請先選擇 Excel 檔');
+  const res = await api.upload(f);
+  alert('Inserted: ' + (res.inserted ?? JSON.stringify(res)));
+  $('#excel').value='';
+  load();
+};
+
+document.addEventListener('DOMContentLoaded', load);
+</script>
+</body>
+</html>
