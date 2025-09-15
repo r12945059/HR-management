@@ -1,4 +1,4 @@
-# HR-management (FastAPI + Docker)
+# HR-management (API + Docker)
 
 簡易的人資管理平台，提供員工清單瀏覽、建立/編輯/刪除、以及 Excel 批次上傳。已容器化，支援一鍵建置與執行。
 
